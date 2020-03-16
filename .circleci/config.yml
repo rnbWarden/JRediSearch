@@ -1,62 +1,42 @@
+# Java Gradle CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-java/ for more details
+#
 version: 2
 jobs:
-  build: # test with redisearch:latest
+  build:
     docker:
-      - image: circleci/openjdk:8-jdk-browsers
-      - image: redislabs/redisearch:latest
+      # specify the version you desire here
+      - image: circleci/openjdk:11-jdk
+
+      # Specify service dependencies here if necessary
+      # CircleCI maintains a library of pre-built images
+      # documented at https://circleci.com/docs/2.0/circleci-images/
+      # - image: circleci/postgres:9.4
+
+    working_directory: ~/repo
+
+    environment:
+      # Customize the JVM maximum heap limit
+      JVM_OPTS: -Xmx3200m
+      TERM: dumb
 
     steps:
       - checkout
 
+      # Download and cache dependencies
       - restore_cache:
-          key: jredisearch-{{ checksum "pom.xml" }}
+          keys:
+            - v1-dependencies-{{ checksum "build.gradle" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
 
-      - run: mvn dependency:go-offline
+      - run: gradle dependencies
 
       - save_cache:
           paths:
-            - ~/.m2
-          key: jredisearch-{{ checksum "pom.xml" }}
-          
-      - run: mvn integration-test 
-      - run: mvn cobertura:cobertura
-      - run: bash <(curl -s https://codecov.io/bash) -t ${CODECOV_TOKEN}  
-      - run: mvn -s .circleci.settings.xml -DskipTests deploy
+            - ~/.gradle
+          key: v1-dependencies-{{ checksum "build.gradle" }}
 
-  build_nightly:  # test nightly with redisearch:edge 
-    docker:
-      - image: circleci/openjdk:8-jdk-browsers
-      - image: redislabs/redisearch:edge
-
-    steps:
-      - checkout
-
-      - restore_cache:
-          key: jredisearch-{{ checksum "pom.xml" }}
-
-      - run: mvn dependency:go-offline
-
-      - save_cache:
-          paths:
-            - ~/.m2
-          key: jredisearch-{{ checksum "pom.xml" }}
-          
-      - run: mvn integration-test 
-      
-      #no need for codecov on nightly
-
-workflows:
-  version: 2
-  commit:
-    jobs:
-      - build
-  nightly:
-    triggers:
-      - schedule:
-          cron: "0 0 * * *"
-          filters:
-            branches:
-              only:
-                - master
-    jobs:
-      - build_nightly
+      # run tests!
+      - run: gradle test
